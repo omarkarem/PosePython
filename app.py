@@ -139,11 +139,10 @@ def calculate_body_lengths(landmarks, frame_shape, user_height_cm):
         }
     }
 
-# Function to generate recommendations
 def generate_recommendations(max_angles, min_angles, body_lengths, torso_angle):
     """
     Generate evidence-based bike fit recommendations using research-backed angle ranges,
-    personalized to the user's specific body measurements.
+    personalized to the user's specific body measurements for both road and time trial bikes.
     
     Parameters:
     - max_angles: Dictionary containing maximum joint angles observed
@@ -152,12 +151,15 @@ def generate_recommendations(max_angles, min_angles, body_lengths, torso_angle):
     - torso_angle: Measured torso angle relative to horizontal
     
     Returns:
-    - Dictionary with three categories of recommendations
+    - Dictionary with prioritized recommendations for different bike types and riding styles
     """
     recommendations = {
         'general': [],
-        'endurance': [],
-        'aggressive': []
+        'road_bike': {
+            'endurance': [],
+            'aggressive': []
+        },
+        'time_trial': []
     }
 
     # Extract body measurements
@@ -169,81 +171,104 @@ def generate_recommendations(max_angles, min_angles, body_lengths, torso_angle):
     torso_femur_ratio = torso_length / femur_length if femur_length > 0 else 1.0
     leg_length = femur_length + lower_leg_length
     
-    # Adjust optimal angles based on body proportions
-    # Riders with longer femurs relative to torso often need different angles
-    
-    # -------- SADDLE HEIGHT RECOMMENDATIONS --------
+    # -------- SADDLE HEIGHT RECOMMENDATIONS - APPLIES TO BOTH BIKE TYPES --------
     # Personalize knee extension angle targets based on leg proportions
     femur_lower_leg_ratio = femur_length / lower_leg_length if lower_leg_length > 0 else 1.0
     
     # Adjust optimal knee extension angles based on leg proportions
-    # Longer femurs relative to lower legs often benefit from slightly greater extension
     knee_ext_adjustment = 0
     if femur_lower_leg_ratio > 1.1:  # Longer femur
         knee_ext_adjustment = 2  # Increase optimal angle
     elif femur_lower_leg_ratio < 0.9:  # Shorter femur
         knee_ext_adjustment = -2  # Decrease optimal angle
     
-    # Personalized optimal ranges
-    min_knee_ext = 140 + knee_ext_adjustment
-    max_knee_ext = 148 + knee_ext_adjustment
+    # Personalized optimal ranges - slightly different for TT vs road
+    min_knee_ext_road = 140 + knee_ext_adjustment
+    max_knee_ext_road = 148 + knee_ext_adjustment
+    
+    # TT bikes often have slightly lower saddle height
+    min_knee_ext_tt = 138 + knee_ext_adjustment
+    max_knee_ext_tt = 145 + knee_ext_adjustment
     
     knee_extension = max_angles['hip_knee_ankle']
     
     # Convert angle differences to precise saddle height adjustments
-    # Based on the user's leg length (more accurate than fixed mm per degree)
     mm_per_degree = leg_length * 0.01  # About 1% of leg length per degree
     
-    if knee_extension > max_knee_ext:
-        adj_mm = (knee_extension - max_knee_ext) * mm_per_degree
-        recommendations['general'].append(f"Saddle too high for your proportions. Lower by {adj_mm:.1f}mm to achieve optimal knee extension of {min_knee_ext}-{max_knee_ext}°.")
-    elif knee_extension < min_knee_ext:
-        adj_mm = (min_knee_ext - knee_extension) * mm_per_degree
-        recommendations['general'].append(f"Saddle too low for your proportions. Raise by {adj_mm:.1f}mm to achieve optimal knee extension of {min_knee_ext}-{max_knee_ext}°.")
-    elif knee_extension > (min_knee_ext + max_knee_ext)/2 and knee_extension <= max_knee_ext:
-        recommendations['general'].append(f"Saddle height good for endurance riding (current knee extension: {knee_extension}°).")
-        recommendations['aggressive'].append(f"For more power, consider lowering saddle by {5 * mm_per_degree:.1f}mm to reduce knee extension angle slightly.")
-    elif knee_extension >= min_knee_ext and knee_extension < (min_knee_ext + max_knee_ext)/2:
-        recommendations['general'].append(f"Saddle height acceptable but on lower end (current knee extension: {knee_extension}°).")
-        recommendations['endurance'].append(f"For more comfort on longer rides, consider raising saddle by {5 * mm_per_degree:.1f}mm.")
+    # Road bike saddle height recommendations
+    if knee_extension > max_knee_ext_road:
+        adj_mm = (knee_extension - max_knee_ext_road) * mm_per_degree
+        recommendations['general'].append(f"SADDLE HEIGHT: Your saddle is too high (knee extension: {knee_extension}°). Lower your saddle by approximately {adj_mm:.1f}mm to achieve the optimal knee extension of {min_knee_ext_road}-{max_knee_ext_road}°.")
+    elif knee_extension < min_knee_ext_road:
+        adj_mm = (min_knee_ext_road - knee_extension) * mm_per_degree
+        recommendations['general'].append(f"SADDLE HEIGHT: Your saddle is too low (knee extension: {knee_extension}°). Raise your saddle by approximately {adj_mm:.1f}mm to achieve the optimal knee extension of {min_knee_ext_road}-{max_knee_ext_road}°.")
     else:
-        recommendations['general'].append(f"Saddle height optimal for your proportions (current knee extension: {knee_extension}°).")
+        recommendations['general'].append(f"SADDLE HEIGHT: Good position (knee extension: {knee_extension}°). No change needed.")
+        
+        if knee_extension > (min_knee_ext_road + max_knee_ext_road)/2:
+            recommendations['road_bike']['aggressive'].append(f"SADDLE HEIGHT (AGGRESSIVE): For more power in aggressive position, try lowering saddle by {5 * mm_per_degree:.1f}mm to reduce knee extension angle slightly.")
+        else:
+            recommendations['road_bike']['endurance'].append(f"SADDLE HEIGHT (ENDURANCE): For more comfort on longer rides, try raising saddle by {5 * mm_per_degree:.1f}mm for slightly less knee bend.")
+    
+    # TT bike saddle height recommendations
+    if knee_extension > max_knee_ext_tt:
+        adj_mm = (knee_extension - max_knee_ext_tt) * mm_per_degree
+        recommendations['time_trial'].append(f"SADDLE HEIGHT (TIME TRIAL): For time trial position, your saddle would need to be {adj_mm:.1f}mm lower to achieve optimal TT knee extension of {min_knee_ext_tt}-{max_knee_ext_tt}°.")
+    elif knee_extension < min_knee_ext_tt:
+        adj_mm = (min_knee_ext_tt - knee_extension) * mm_per_degree
+        recommendations['time_trial'].append(f"SADDLE HEIGHT (TIME TRIAL): For time trial position, your saddle would need to be {adj_mm:.1f}mm higher to achieve optimal TT knee extension of {min_knee_ext_tt}-{max_knee_ext_tt}°.")
+    else:
+        recommendations['time_trial'].append(f"SADDLE HEIGHT (TIME TRIAL): Your current saddle height would work well for time trial position (knee extension: {knee_extension}°). No change needed.")
     
     # -------- KNEE OVER PEDAL SPINDLE (KOPS) / FORE-AFT POSITIONING --------
-    # Personalize based on femur length and riding style
+    # Different targets for road vs TT bikes
     knee_flexion_tdc = min_angles['hip_knee_ankle']
     
     # Adjust optimal range based on femur length
-    # Riders with longer femurs often benefit from different fore/aft position
     tdc_adjustment = 0
     if femur_length > 45:  # Longer femur
         tdc_adjustment = 2  # Allow slightly more flexion
     elif femur_length < 38:  # Shorter femur
         tdc_adjustment = -2  # Recommend slightly less flexion
     
-    min_tdc_angle = 65 + tdc_adjustment
-    max_tdc_angle = 75 + tdc_adjustment
+    # Road bike ranges
+    min_tdc_angle_road = 65 + tdc_adjustment
+    max_tdc_angle_road = 75 + tdc_adjustment
+    
+    # TT bike ranges - generally more forward position
+    min_tdc_angle_tt = 60 + tdc_adjustment  # More aggressive forward position
+    max_tdc_angle_tt = 70 + tdc_adjustment
     
     # Calculate saddle adjustment based on femur length
     mm_per_tdc_degree = femur_length * 0.05  # 5% of femur length per degree change
     
-    if knee_flexion_tdc > max_tdc_angle:
-        adj_mm = (knee_flexion_tdc - max_tdc_angle) * mm_per_tdc_degree
-        recommendations['general'].append(f"Excessive knee flexion at top of pedal stroke ({knee_flexion_tdc}°). Based on your femur length of {femur_length:.1f}cm, move saddle forward by {adj_mm:.1f}mm.")
-    elif knee_flexion_tdc < min_tdc_angle:
-        adj_mm = (min_tdc_angle - knee_flexion_tdc) * mm_per_tdc_degree
-        recommendations['general'].append(f"Insufficient knee flexion at top of pedal stroke ({knee_flexion_tdc}°). Based on your femur length of {femur_length:.1f}cm, move saddle backward by {adj_mm:.1f}mm.")
+    # Road bike saddle fore/aft recommendations
+    if knee_flexion_tdc > max_tdc_angle_road:
+        adj_mm = (knee_flexion_tdc - max_tdc_angle_road) * mm_per_tdc_degree
+        recommendations['road_bike']['endurance'].append(f"SADDLE FORE/AFT: Your knee is too bent at the top of pedal stroke ({knee_flexion_tdc}°). Move saddle forward by {adj_mm:.1f}mm to improve pedaling efficiency.")
+    elif knee_flexion_tdc < min_tdc_angle_road:
+        adj_mm = (min_tdc_angle_road - knee_flexion_tdc) * mm_per_tdc_degree
+        recommendations['road_bike']['endurance'].append(f"SADDLE FORE/AFT: Your knee is too straight at the top of pedal stroke ({knee_flexion_tdc}°). Move saddle backward by {adj_mm:.1f}mm to reduce strain on knee joints.")
     else:
-        recommendations['general'].append(f"Saddle fore/aft position good for your proportions (knee flexion at top: {knee_flexion_tdc}°).")
+        recommendations['general'].append(f"SADDLE FORE/AFT: Good position (knee angle at top: {knee_flexion_tdc}°). No change needed.")
         
-        if knee_flexion_tdc > (min_tdc_angle + max_tdc_angle)/2:
-            recommendations['aggressive'].append(f"For more aggressive position, consider moving saddle back {5 * mm_per_tdc_degree:.1f}mm for better power transfer.")
+        if knee_flexion_tdc > (min_tdc_angle_road + max_tdc_angle_road)/2:
+            recommendations['road_bike']['aggressive'].append(f"SADDLE FORE/AFT (AGGRESSIVE): For more aggressive road position, try moving saddle back {5 * mm_per_tdc_degree:.1f}mm for better power transfer.")
         else:
-            recommendations['endurance'].append(f"For more comfort on long rides, consider moving saddle forward {5 * mm_per_tdc_degree:.1f}mm.")
+            recommendations['road_bike']['endurance'].append(f"SADDLE FORE/AFT (ENDURANCE): For more comfort on long rides, try moving saddle forward {5 * mm_per_tdc_degree:.1f}mm to reduce reach.")
+    
+    # TT bike saddle fore/aft recommendations
+    if knee_flexion_tdc > max_tdc_angle_tt:
+        adj_mm = (knee_flexion_tdc - max_tdc_angle_tt) * mm_per_tdc_degree
+        recommendations['time_trial'].append(f"SADDLE FORE/AFT (TIME TRIAL): For time trial position, move saddle forward by {adj_mm:.1f}mm to achieve optimal aerodynamic position with knee angle between {min_tdc_angle_tt}-{max_tdc_angle_tt}°.")
+    elif knee_flexion_tdc < min_tdc_angle_tt:
+        adj_mm = (min_tdc_angle_tt - knee_flexion_tdc) * mm_per_tdc_degree
+        recommendations['time_trial'].append(f"SADDLE FORE/AFT (TIME TRIAL): For time trial position, move saddle backward by {adj_mm:.1f}mm to achieve optimal pedaling efficiency with knee angle between {min_tdc_angle_tt}-{max_tdc_angle_tt}°.")
+    else:
+        recommendations['time_trial'].append(f"SADDLE FORE/AFT (TIME TRIAL): Your current saddle fore/aft position would work well for time trial (knee angle at top: {knee_flexion_tdc}°). No change needed.")
     
     # -------- TORSO ANGLE RECOMMENDATIONS --------
-    # Adjust recommendation based on torso-femur ratio - longer torsos can go lower
-    # and shorter riders may need more upright positions
+    # Significantly different between road and TT bikes
     
     # Calculate more personalized adjustment based on proportions
     adjustment = 0
@@ -265,45 +290,67 @@ def generate_recommendations(max_angles, min_angles, body_lengths, torso_angle):
     
     total_adjustment = adjustment + height_adj
     
-    # Apply the personalized adjustment to the angle ranges
-    min_general = 25 - total_adjustment
-    max_general = 40 - total_adjustment
-    min_aggressive = 15 - total_adjustment
-    max_aggressive = 25 - total_adjustment
-    min_endurance = 40 - total_adjustment
-    max_endurance = 55 - total_adjustment
+    # Road bike torso angle ranges
+    min_general_road = 25 - total_adjustment
+    max_general_road = 40 - total_adjustment
+    min_aggressive_road = 15 - total_adjustment
+    max_aggressive_road = 25 - total_adjustment
+    min_endurance_road = 40 - total_adjustment
+    max_endurance_road = 55 - total_adjustment
+    
+    # TT bike torso angle ranges - much more aggressive
+    min_tt = 5 - total_adjustment
+    max_tt = 15 - total_adjustment
     
     # Ensure all angles are in reasonable ranges
-    min_general = max(10, min_general)
-    max_general = max(min_general + 10, max_general)
-    min_aggressive = max(5, min_aggressive)
-    max_aggressive = max(min_aggressive + 5, max_aggressive)
-    min_endurance = max(max_general, min_endurance)
-    max_endurance = max(min_endurance + 10, max_endurance)
+    min_general_road = max(10, min_general_road)
+    max_general_road = max(min_general_road + 10, max_general_road)
+    min_aggressive_road = max(5, min_aggressive_road)
+    max_aggressive_road = max(min_aggressive_road + 5, max_aggressive_road)
+    min_endurance_road = max(max_general_road, min_endurance_road)
+    max_endurance_road = max(min_endurance_road + 10, max_endurance_road)
+    min_tt = max(0, min_tt)
+    max_tt = max(min_tt + 5, max_tt)
     
     # Generate personalized recommendations based on current torso angle
     mm_per_angle_degree = (torso_length * 0.07)  # Approx 7% of torso length per degree
     
-    if torso_angle < min_aggressive:
-        recommendations['general'].append(f"Torso angle too low ({torso_angle}°) for your body proportions. Raise handlebars by {(min_aggressive - torso_angle) * mm_per_angle_degree:.1f}mm for better comfort.")
-    elif torso_angle > max_endurance:
-        recommendations['general'].append(f"Torso angle too upright ({torso_angle}°) for your proportions. Lower handlebars by {(torso_angle - max_endurance) * mm_per_angle_degree:.1f}mm for better aerodynamics.")
-    elif min_aggressive <= torso_angle < min_general:
-        recommendations['general'].append(f"Current torso angle ({torso_angle}°) is very aggressive for your body proportions.")
-        recommendations['endurance'].append(f"For endurance riding with your proportions, raise handlebars by {(min_endurance - torso_angle) * mm_per_angle_degree:.1f}mm to achieve a more comfortable torso angle.")
-    elif max_general < torso_angle <= max_endurance:
-        recommendations['general'].append(f"Current torso angle ({torso_angle}°) is upright, good for endurance with your proportions.")
-        recommendations['aggressive'].append(f"For more aerodynamic position, lower handlebars by {(torso_angle - min_aggressive) * mm_per_angle_degree:.1f}mm to achieve a more aggressive torso angle.")
+    # Road bike torso angle recommendations
+    if torso_angle < min_aggressive_road:
+        recommendations['general'].append(f"HANDLEBAR HEIGHT: Your torso angle is very low ({torso_angle}°), which may be uncomfortable for road cycling.")
+        recommendations['road_bike']['endurance'].append(f"HANDLEBAR HEIGHT (ENDURANCE): For endurance position, raise handlebars by {(min_endurance_road - torso_angle) * mm_per_angle_degree:.1f}mm to achieve a more comfortable riding position.")
+        recommendations['road_bike']['aggressive'].append(f"HANDLEBAR HEIGHT (AGGRESSIVE): Even for aggressive position, consider raising handlebars by {(min_aggressive_road - torso_angle) * mm_per_angle_degree:.1f}mm to improve comfort while maintaining aerodynamics.")
+    elif torso_angle > max_endurance_road:
+        recommendations['general'].append(f"HANDLEBAR HEIGHT: Your torso angle is too upright ({torso_angle}°), reducing aerodynamic efficiency.")
+        recommendations['road_bike']['endurance'].append(f"HANDLEBAR HEIGHT (ENDURANCE): For endurance position, lower handlebars by {(torso_angle - max_endurance_road) * mm_per_angle_degree:.1f}mm to improve aerodynamics while maintaining comfort.")
+        recommendations['road_bike']['aggressive'].append(f"HANDLEBAR HEIGHT (AGGRESSIVE): For aggressive position, lower handlebars by {(torso_angle - max_aggressive_road) * mm_per_angle_degree:.1f}mm to achieve proper aerodynamic position.")
+    elif min_aggressive_road <= torso_angle < min_general_road:
+        recommendations['general'].append(f"HANDLEBAR HEIGHT: Your torso angle ({torso_angle}°) is already set for an aggressive road cycling position.")
+        recommendations['road_bike']['aggressive'].append(f"HANDLEBAR HEIGHT (AGGRESSIVE): Your torso angle is optimal for aggressive road position. No change needed.")
+        recommendations['road_bike']['endurance'].append(f"HANDLEBAR HEIGHT (ENDURANCE): For more comfortable endurance riding, raise handlebars by {(min_endurance_road - torso_angle) * mm_per_angle_degree:.1f}mm.")
+    elif max_general_road < torso_angle <= max_endurance_road:
+        recommendations['general'].append(f"HANDLEBAR HEIGHT: Your torso angle ({torso_angle}°) is upright, suitable for comfortable endurance cycling.")
+        recommendations['road_bike']['endurance'].append(f"HANDLEBAR HEIGHT (ENDURANCE): Your torso angle is good for endurance road position. No change needed.")
+        recommendations['road_bike']['aggressive'].append(f"HANDLEBAR HEIGHT (AGGRESSIVE): For more aerodynamic riding, lower handlebars by {(torso_angle - max_aggressive_road) * mm_per_angle_degree:.1f}mm.")
     else:
-        recommendations['general'].append(f"Torso angle ({torso_angle}°) is optimal for general road riding with your body proportions.")
+        recommendations['general'].append(f"HANDLEBAR HEIGHT: Your torso angle ({torso_angle}°) is optimal for balanced road riding. No change needed.")
         
-        if torso_angle > (min_general + max_general)/2:
-            recommendations['aggressive'].append(f"For more aggressive position with your proportions, consider lowering handlebars by {(torso_angle - min_aggressive) * mm_per_angle_degree:.1f}mm.")
+        if torso_angle > (min_general_road + max_general_road)/2:
+            recommendations['road_bike']['aggressive'].append(f"HANDLEBAR HEIGHT (AGGRESSIVE): For more aggressive road position, consider lowering handlebars by {(torso_angle - min_aggressive_road) * mm_per_angle_degree:.1f}mm to improve aerodynamics.")
         else:
-            recommendations['endurance'].append(f"For more comfort on long rides with your proportions, consider raising handlebars by {(min_endurance - torso_angle) * mm_per_angle_degree:.1f}mm.")
+            recommendations['road_bike']['endurance'].append(f"HANDLEBAR HEIGHT (ENDURANCE): For more comfort on long road rides, consider raising handlebars by {(min_endurance_road - torso_angle) * mm_per_angle_degree:.1f}mm.")
+    
+    # TT bike torso angle recommendations
+    if torso_angle < min_tt:
+        recommendations['time_trial'].append(f"HANDLEBAR HEIGHT (TIME TRIAL): Your torso angle ({torso_angle}°) is extremely aggressive, potentially too low even for time trial position. Consider a professional bike fitting.")
+    elif torso_angle > max_tt:
+        adj_mm = (torso_angle - max_tt) * mm_per_angle_degree
+        recommendations['time_trial'].append(f"HANDLEBAR HEIGHT (TIME TRIAL): For time trial position, lower handlebars/pads by {adj_mm:.1f}mm to achieve optimal TT torso angle of {min_tt}-{max_tt}° for better aerodynamics.")
+    else:
+        recommendations['time_trial'].append(f"HANDLEBAR HEIGHT (TIME TRIAL): Your current torso angle ({torso_angle}°) would work well for time trial position. No change needed.")
     
     # -------- ELBOW ANGLE / REACH RECOMMENDATIONS --------
-    # Personalize based on arm length and torso length
+    # Completely different targets for road vs TT
     elbow_angle = max_angles['shoulder_elbow_wrist']
     
     # Get arm measurements
@@ -317,50 +364,92 @@ def generate_recommendations(max_angles, min_angles, body_lengths, torso_angle):
     elif arm_torso_ratio < 0.6:  # Shorter arms relative to torso
         elbow_adjustment = -5  # Need more bend
     
-    min_elbow = 60 + elbow_adjustment
-    max_elbow = 80 + elbow_adjustment
+    # Road bike elbow angle ranges
+    min_elbow_road = 60 + elbow_adjustment
+    max_elbow_road = 100 + elbow_adjustment  # Increased from 80 to allow for straighter arms if preferred
     
-    # Calculate personalized stem adjustment
-    stem_change_factor = arm_length * 0.02  # 2% of arm length per degree of angle change
+    # TT bike elbow angle ranges - typically more bent
+    min_elbow_tt = 80 + elbow_adjustment
+    max_elbow_tt = 130 + elbow_adjustment  # Increased from 110 to allow for straighter arms
     
-    if elbow_angle < min_elbow:
-        stem_change = (min_elbow - elbow_angle) * stem_change_factor
-        recommendations['general'].append(f"Arms too bent ({elbow_angle}°) for your proportions. Increase reach with longer stem (+{stem_change:.1f}mm).")
-    elif elbow_angle > max_elbow:
-        stem_change = (elbow_angle - max_elbow) * stem_change_factor
-        recommendations['general'].append(f"Arms too extended ({elbow_angle}°) for your proportions. Decrease reach with shorter stem (-{stem_change:.1f}mm).")
+    # Calculate personalized reach adjustment - but with reduced factor
+    stem_change_factor = arm_length * 0.01  # Reduced from 0.02 to 0.01 - 1% of arm length per degree change
+    
+    # Road bike arm/reach recommendations with capped adjustments
+    if elbow_angle < min_elbow_road:
+        adj_mm = min(50, (min_elbow_road - elbow_angle) * stem_change_factor)  # Cap at 50mm
+        recommendations['road_bike']['endurance'].append(f"STEM LENGTH: Your arms are too bent ({elbow_angle}°). Consider a longer stem (+{adj_mm:.1f}mm) to achieve a more comfortable extended position for your arms.")
+    elif elbow_angle > max_elbow_road:
+        adj_mm = min(50, (elbow_angle - max_elbow_road) * stem_change_factor)  # Cap at 50mm
+        recommendations['road_bike']['endurance'].append(f"STEM LENGTH: Your arms are relatively straight ({elbow_angle}°). If you experience discomfort on longer rides, consider a shorter stem (-{adj_mm:.1f}mm). If currently comfortable, no change is necessary.")
     else:
-        recommendations['general'].append(f"Elbow angle optimal ({elbow_angle}°) for your arm length and proportions.")
+        recommendations['general'].append(f"STEM LENGTH: Your elbow angle ({elbow_angle}°) is good for road cycling. No change needed.")
+        
+    # TT bike arm/reach recommendations with capped adjustments
+    if elbow_angle < min_elbow_tt:
+        adjustment = min(50, (min_elbow_tt - elbow_angle) * stem_change_factor)  # Cap at 50mm
+        recommendations['time_trial'].append(f"ARM POSITION (TIME TRIAL): Your arms are too bent ({elbow_angle}°). Move aero pads forward by {adjustment:.1f}mm to optimize aerodynamic position.")
+    elif elbow_angle > max_elbow_tt:
+        adjustment = min(50, (elbow_angle - max_elbow_tt) * stem_change_factor)  # Cap at 50mm
+        recommendations['time_trial'].append(f"ARM POSITION (TIME TRIAL): Your arms are relatively straight ({elbow_angle}°). Some riders prefer a slight bend for comfort and control. If you feel comfortable, no change needed. Otherwise, consider moving aero pads back by {adjustment:.1f}mm.")
+    else:
+        recommendations['time_trial'].append(f"ARM POSITION (TIME TRIAL): Your current elbow angle ({elbow_angle}°) would work well for time trial position. No change needed.")
     
     # -------- HIP ANGLE RECOMMENDATIONS --------
+    # Different targets for road vs TT
     hip_angle = min_angles['shoulder_hip_knee']
     
-    # Adjust hip angle recommendations based on leg-torso proportions
+    # Adjust hip angle recommendations based on proportions
     hip_adjustment = 0
     if torso_femur_ratio > 1.1:  # Long torso relative to femur
         hip_adjustment = -3  # Can handle more closed hip angle
     elif torso_femur_ratio < 0.9:  # Short torso relative to femur
         hip_adjustment = 3  # Needs more open hip angle
-        
-    min_hip = 45 + hip_adjustment
-    max_hip = 55 + hip_adjustment
     
-    if hip_angle < min_hip - 5:
-        recommendations['general'].append(f"Hip angle too closed ({hip_angle}°) for your proportions. Based on your torso-to-femur ratio, adjust either:")
-        recommendations['general'].append(f"- Move saddle backward by {(min_hip - hip_angle) * femur_length * 0.03:.1f}mm, or")
-        recommendations['general'].append(f"- Raise handlebars by {(min_hip - hip_angle) * torso_length * 0.05:.1f}mm")
-    elif hip_angle > max_hip + 5:
-        recommendations['general'].append(f"Hip angle too open ({hip_angle}°) for your proportions. Based on your torso-to-femur ratio, adjust either:")
-        recommendations['general'].append(f"- Move saddle forward by {(hip_angle - max_hip) * femur_length * 0.03:.1f}mm, or")
-        recommendations['general'].append(f"- Lower handlebars by {(hip_angle - max_hip) * torso_length * 0.05:.1f}mm")
-    elif hip_angle >= min_hip - 5 and hip_angle < min_hip:
-        recommendations['general'].append(f"Hip angle ({hip_angle}°) on aggressive side but acceptable for your proportions.")
-        recommendations['endurance'].append(f"For more comfort with your body proportions, consider small adjustments to open hip angle by 2-3°.")
-    elif hip_angle > max_hip and hip_angle <= max_hip + 5:
-        recommendations['general'].append(f"Hip angle ({hip_angle}°) on relaxed side but acceptable for your proportions.")
-        recommendations['aggressive'].append(f"For more power transfer with your proportions, consider adjustments to close hip angle by 2-3°.")
+    # Road bike hip angle ranges    
+    min_hip_road = 45 + hip_adjustment
+    max_hip_road = 55 + hip_adjustment
+    
+    # TT bike hip angle ranges - typically more closed
+    min_hip_tt = 35 + hip_adjustment
+    max_hip_tt = 45 + hip_adjustment
+    
+    # Road bike hip angle recommendations
+    if hip_angle < min_hip_road - 5:
+        adj_mm = (min_hip_road - hip_angle) * femur_length * 0.03
+        recommendations['road_bike']['endurance'].append(f"HIP ANGLE: Your hip angle is too closed ({hip_angle}°). Move saddle back by {adj_mm:.1f}mm to reduce hip flexion and improve comfort.")
+    elif hip_angle > max_hip_road + 5:
+        adj_mm = (hip_angle - max_hip_road) * femur_length * 0.03
+        recommendations['road_bike']['endurance'].append(f"HIP ANGLE: Your hip angle is too open ({hip_angle}°). Move saddle forward by {adj_mm:.1f}mm to improve pedaling efficiency.")
+    elif hip_angle >= min_hip_road - 5 and hip_angle < min_hip_road:
+        recommendations['road_bike']['aggressive'].append(f"HIP ANGLE (AGGRESSIVE): Your hip angle ({hip_angle}°) is on the aggressive side but acceptable for road position. No change needed.")
+    elif hip_angle > max_hip_road and hip_angle <= max_hip_road + 5:
+        recommendations['road_bike']['endurance'].append(f"HIP ANGLE (ENDURANCE): Your hip angle ({hip_angle}°) is on the relaxed side but acceptable for endurance road position. No change needed.")
     else:
-        recommendations['general'].append(f"Hip angle optimal ({hip_angle}°) for balanced position with your body proportions.")
+        recommendations['general'].append(f"HIP ANGLE: Your hip angle ({hip_angle}°) is optimal for road bike position. No change needed.")
+    
+    # TT bike hip angle recommendations
+    if hip_angle < min_hip_tt - 5:
+        recommendations['time_trial'].append(f"HIP ANGLE (TIME TRIAL): Your hip angle ({hip_angle}°) is very closed, potentially too aggressive even for time trial position. Consider a professional bike fitting.")
+    elif hip_angle > max_hip_tt + 5:
+        adj_mm = (hip_angle - max_hip_tt) * femur_length * 0.03
+        recommendations['time_trial'].append(f"HIP ANGLE (TIME TRIAL): Your hip angle is too open ({hip_angle}°). Move saddle forward by {adj_mm:.1f}mm to achieve a more aerodynamic position.")
+    else:
+        recommendations['time_trial'].append(f"HIP ANGLE (TIME TRIAL): Your current hip angle ({hip_angle}°) would work well for time trial position. No change needed.")
+    
+    # Make sure the aggressive section always has recommendations
+    if len(recommendations['road_bike']['aggressive']) == 0:
+        recommendations['road_bike']['aggressive'].append(f"Current position acceptable for aggressive road riding. No specific changes needed.")
+    
+    # Sort all recommendations so PRIORITY items are first
+    for category in recommendations:
+        if category == 'road_bike':
+            for style in recommendations[category]:
+                recommendations[category][style].sort(key=lambda x: 0 if "PRIORITY" in x else 1)
+        elif category == 'general':
+            recommendations[category].sort(key=lambda x: 0 if "PRIORITY" in x else 1)
+        elif category == 'time_trial':
+            recommendations[category].sort(key=lambda x: 0 if "PRIORITY" in x else 1)
     
     return recommendations
 
