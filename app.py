@@ -1165,35 +1165,18 @@ def create_full_video(frames, fps, width, height, quality=75):
         temp_output_path = temp_output_file.name
 
     try:
-        # Try different codecs in order of compatibility
-        codecs = ['avc1', 'mp4v', 'xvid']
-        success = False
+        # Use H.264 codec (avc1) which is most compatible across browsers and devices
+        fourcc = cv2.VideoWriter_fourcc(*'avc1')
+        out = cv2.VideoWriter(temp_output_path, fourcc, fps, (width, height), True)
 
-        for codec in codecs:
-            try:
-                print(f"Trying codec: {codec}")
-                fourcc = cv2.VideoWriter_fourcc(*codec)
-                out = cv2.VideoWriter(temp_output_path, fourcc, fps, (width, height), True)
+        if not out.isOpened():
+            raise Exception("Failed to open VideoWriter with H.264 codec")
 
-                if not out.isOpened():
-                    print(f"Failed to open VideoWriter with codec {codec}")
-                    continue
+        # Write ALL frames to video
+        for frame in frames:
+            out.write(frame)
 
-                # Write ALL frames to video
-                for frame in frames:
-                    out.write(frame)
-
-                out.release()
-                success = True
-                print(f"Successfully created video with codec {codec}")
-                break
-            except Exception as e:
-                print(f"Error with codec {codec}: {str(e)}")
-                if out:
-                    out.release()
-
-        if not success:
-            raise Exception("Failed to create video with any codec")
+        out.release()
 
         # Read the video file into memory
         with open(temp_output_path, 'rb') as f:
