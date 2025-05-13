@@ -956,14 +956,14 @@ def process_video():
 
         # Calculate scaled dimensions for output video to reduce size
         if width > 1920 or height > 1080:
-            scale_factor = min(1280 / width, 720 / height)
+            # Maintain higher resolution for better landmark detection
+            scale_factor = min(1920 / width, 1080 / height)
             output_width = int(width * scale_factor)
             output_height = int(height * scale_factor)
         else:
-            # For videos already at 1080p or lower, keep high quality
-            scale_factor = min(0.9, min(1280 / width, 720 / height))
-            output_width = int(width * scale_factor)
-            output_height = int(height * scale_factor)
+            # For videos already at 1080p or lower, keep original size
+            output_width = width
+            output_height = height
 
         # Create a list to store frames for video
         frames = []
