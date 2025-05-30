@@ -8,9 +8,19 @@ import uuid
 import io
 import base64
 from flask_cors import CORS
+import logging
+from werkzeug.utils import secure_filename
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
+
+# Production configurations
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB max file size
+app.config['UPLOAD_EXTENSIONS'] = ['.mp4', '.avi', '.mov', '.webm']
 
 # Create a directory for output videos if it doesn't exist
 UPLOAD_FOLDER = 'output_videos'
@@ -21,6 +31,15 @@ if not os.path.exists(UPLOAD_FOLDER):
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 mp_pose = mp.solutions.pose
+
+@app.errorhandler(413)
+def too_large(e):
+    return jsonify(error="File is too large. Maximum size is 100MB."), 413
+
+@app.errorhandler(500)
+def server_error(e):
+    logger.error(f"Server error: {str(e)}")
+    return jsonify(error="Internal server error"), 500
 
 # Function to calculate the angle between three points
 # Replace the existing calculate_angle function with:
@@ -1207,6 +1226,28 @@ def get_keyframes():
         return jsonify({"error": "Not implemented yet"}), 501
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# Basic route
+@app.route('/')
+def index():
+    return jsonify({
+        "service": "Pose Detection API",
+        "version": "1.0",
+        "status": "active",
+        "endpoints": [
+            "/process-video (POST)",
+            "/health (GET)"
+        ]
+    })
+
+# Health check endpoint
+@app.route('/health')
+def health_check():
+    return jsonify({
+        "status": "healthy",
+        "service": "pose-detection",
+        "timestamp": os.popen('date').read().strip()
+    })
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

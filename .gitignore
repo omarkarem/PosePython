@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Flask
+instance/
+.webassets-cache
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Output files
+output_videos/
+*.mp4
+*.avi
+
+# Logs
+*.log
+
+# Environment variables
+.env
+
+# Deployment files for other platforms (to be removed)
+Procfile
+Aptfile
+vercel.json
+runtime.txt
+build.sh
+outputApp.py
+
+# Backup files
+*.bak
+*~ 
