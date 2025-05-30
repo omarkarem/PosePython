@@ -10,6 +10,7 @@ import base64
 from flask_cors import CORS
 import logging
 from werkzeug.utils import secure_filename
+import subprocess
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -1179,41 +1180,71 @@ def process_video():
 # Add this improved function to create a video from ALL frames
 def create_full_video(frames, fps, width, height, quality=75):
     """Create an MP4 video from all frames and return as base64 string"""
-    # Create temporary file for video output
-    with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as temp_output_file:
-        temp_output_path = temp_output_file.name
+    # Create temporary files for intermediate and final output
+    with tempfile.NamedTemporaryFile(suffix='_temp.mp4', delete=False) as temp_intermediate:
+        temp_intermediate_path = temp_intermediate.name
+    
+    with tempfile.NamedTemporaryFile(suffix='_final.mp4', delete=False) as temp_final:
+        temp_final_path = temp_final.name
 
     try:
-        # Use H.264 codec (avc1) which is most compatible across browsers and devices
-        fourcc = cv2.VideoWriter_fourcc(*'avc1')
-        out = cv2.VideoWriter(temp_output_path, fourcc, fps, (width, height), True)
+        # First, create video with mp4v codec (which works with OpenCV)
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(temp_intermediate_path, fourcc, fps, (width, height), True)
 
         if not out.isOpened():
-            raise Exception("Failed to open VideoWriter with H.264 codec")
+            raise Exception("Failed to open VideoWriter with mp4v codec")
 
-        # Write ALL frames to video
+        # Write ALL frames to intermediate video
         for frame in frames:
             out.write(frame)
 
         out.release()
 
-        # Read the video file into memory
-        with open(temp_output_path, 'rb') as f:
-            video_data = f.read()
+        # Use system FFmpeg to convert to H.264 with high browser compatibility
+        ffmpeg_cmd = [
+            'ffmpeg', '-y',  # -y overwrites output file
+            '-i', temp_intermediate_path,
+            '-c:v', 'libx264',  # Use H.264 codec
+            '-preset', 'fast',  # Balance speed vs compression
+            '-crf', '23',  # Good quality (lower = better quality)
+            '-movflags', '+faststart',  # Enable web streaming
+            '-pix_fmt', 'yuv420p',  # Ensure browser compatibility
+            temp_final_path
+        ]
+        
+        # Run FFmpeg conversion
+        result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=60)
+        
+        if result.returncode != 0:
+            logger.error(f"FFmpeg conversion failed: {result.stderr}")
+            # Fallback: return the mp4v version if H.264 conversion fails
+            with open(temp_intermediate_path, 'rb') as f:
+                video_data = f.read()
+        else:
+            # Read the H.264 converted video
+            with open(temp_final_path, 'rb') as f:
+                video_data = f.read()
 
         # Base64 encode the video
         encoded_video = base64.b64encode(video_data).decode('utf-8')
 
-        # Delete the temp file
+        # Clean up temporary files
         import os
-        if os.path.exists(temp_output_path):
-            os.remove(temp_output_path)
+        for temp_path in [temp_intermediate_path, temp_final_path]:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
 
         return encoded_video
+        
     except Exception as e:
+        # Clean up temporary files in case of error
         import os
-        if os.path.exists(temp_output_path):
-            os.remove(temp_output_path)
+        for temp_path in [temp_intermediate_path, temp_final_path]:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+        
+        logger.error(f"Video creation failed: {str(e)}")
         raise e
 
 # New endpoint to get keyframes - can be used if full video is too large
