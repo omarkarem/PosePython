@@ -1,0 +1,31 @@
+# YOLO 11 Pose Detection Requirements
+ultralytics==8.0.228
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Computer Vision
+opencv-python==4.8.1.78
+numpy==1.24.3
+Pillow==10.0.1
+
+# Web Framework
+Flask==2.3.3
+Flask-CORS==4.0.0
+Werkzeug==2.3.7
+
+# Data Science
+PyYAML==6.0.1
+scipy==1.11.3
+
+# System utilities
+pathlib2==2.3.7.post1
+psutil==5.9.5
+
+# For pose estimation
+matplotlib==3.7.2
+seaborn==0.12.2
+
+# GPU acceleration (optional, comment out if no GPU)
+# For CUDA 11.8
+# torch>=2.0.0+cu118
+# torchvision>=0.15.0+cu118 
